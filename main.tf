@@ -10,6 +10,7 @@ terraform {
 provider "aws" {
   region                   = "us-east-1"
   shared_credentials_files = ["./credentials"]
+
   default_tags {
     tags = {
       Environment = "Dev"
@@ -17,16 +18,23 @@ provider "aws" {
       StudentID   = "48093143"
     }
   }
-
 }
 
 resource "aws_instance" "hextris-server" {
   ami           = "ami-0c421724a94bba6d6"
-  # ami           = data.aws_ami.latest.id
   instance_type = "t2.micro"
   key_name      = "vockey"
 
-  user_data = file("./serve-hextris.sh")
+  user_data = <<EOF
+#!/bin/bash
+yum install -y httpd
+systemctl enable httpd
+systemctl start httpd
+
+yum install -y git
+cd /var/www/html
+git clone https://github.com/Hextris/hextris .
+EOF
 
   security_groups = [aws_security_group.hextris-server.name]
 
@@ -36,7 +44,7 @@ resource "aws_instance" "hextris-server" {
 }
 
 output "hextris-url" {
-  value = "http://${aws_instance.hextris-server.public_ip}/"
+  value = aws_instance.hextris-server.public_ip
 }
 
 resource "aws_security_group" "hextris-server" {
@@ -67,12 +75,13 @@ resource "aws_security_group" "hextris-server" {
 
 data "aws_ami" "latest" {
   most_recent = true
-  owners = ["amazon"]
+  owners      = ["amazon"]
 
   filter {
     name   = "name"
     values = ["al2023-ami-2023*"]
   }
+
   filter {
     name   = "root-device-type"
     values = ["ebs"]
